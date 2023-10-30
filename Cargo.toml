@@ -12,8 +12,8 @@ serde = "1.0"
 serde_json = "1.0"
 rocket = { git = "https://github.com/SergioBenitez/Rocket.git", default-features = false, features = ["json", "secrets", "uuid"], rev = "677790d6397147f83066a284ee962bc174c555b5" }
 tl = "0.7.7"
-diesel = {path = "../diesel/diesel", features = ["uuid","extras", "sqlite"] }
-#diesel = {version = "2", features = ["uuid","extras", "postgres"] }
+#diesel = {path = "../diesel/diesel", features = ["uuid","extras", "sqlite"] }
+diesel = {version = "2", features = ["uuid","extras", "sqlite"] }
 uuid = { version = "0.8", features = ["v4"] }
 derive_more = "0.99.0"
 libsqlite3-sys = { version = "0.25.2", features = ["bundled"] }

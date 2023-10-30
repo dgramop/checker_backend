@@ -1,0 +1,24 @@
+resources:
+- name: frontend_repo
+  type: git
+  source:
+    uri: https://github.com/dgramop/checker_frontend.git
+
+jobs:
+- name: checker_frontend
+  plan:
+  - get: frontend_repo
+    trigger: true
+  - task: yarn build
+    inputs:
+    - name: frontend_repo
+    config:
+      platform: linux
+      image_resource:
+        type: registry-image
+        source:
+          repository: risicle/nix-build-task 
+      params:
+        NIXFILE: frontend_repo/project.nix 
+      run:
+        path: /bin/build
