@@ -1,27 +1,28 @@
 {
   inputs = {
-    cargo2nix.url = "github:cargo2nix/cargo2nix/release-0.11.0";
-    flake-utils.follows = "cargo2nix/flake-utils";
-    nixpkgs.follows = "cargo2nix/nixpkgs";
+    flake-utils.url = "github:numtide/flake-utils";
+    naersk.url = "github:nix-community/naersk";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
   };
 
-  outputs = inputs: with inputs;
+  outputs = { self, flake-utils, naersk, nixpkgs }:
     flake-utils.lib.eachDefaultSystem (system:
       let
-        pkgs = import nixpkgs {
+        pkgs = (import nixpkgs) {
           inherit system;
-          overlays = [cargo2nix.overlays.default];
         };
 
-        rustPkgs = pkgs.rustBuilder.makePackageSet {
-          rustVersion = "1.71.0";
-          packageFun = import ./Cargo.nix;
-        };
+        naersk' = pkgs.callPackage naersk {};
 
       in rec {
-        packages = {
-          checker = (rustPkgs.workspace.checker {});
-          default = packages.checker;
+        # For `nix build` & `nix run`:
+        defaultPackage = naersk'.buildPackage {
+          src = ./.;
+        };
+
+        # For `nix develop`:
+        devShell = pkgs.mkShell {
+          buildInputs = with pkgs; [ rustc cargo xcbuild darwin.apple_sdk.frameworks.SystemConfiguration];
         };
       }
     );
