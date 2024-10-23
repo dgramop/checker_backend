@@ -21,6 +21,8 @@ pub mod schema;
 use diesel::{prelude::*, result::DatabaseErrorKind};
 use tokio::sync::RwLock;
 
+const ALUMNUS: [u32; 1] = [1254375];
+
 fn establish_connection() -> SqliteConnection {
     //PgConnection::establish("postgres://127.0.0.1/checker").expect("Should be able to connect to database")
     SqliteConnection::establish("sqlite.db").expect("Should be able to connect to database")
@@ -357,6 +359,13 @@ async fn check_in(id: String, state: &State<St>) -> Json<CheckInResp> {//Json<Ch
             // swiped in in the last minute, allow the person in. In this failure mode, we still
             // get gnumber and name information
             if eligibility.eligible || eligibility.code == "DENY902" {
+                return Json(CheckInResp::Allow {
+                    html, 
+                    name,
+                    gnum,
+                    workshops
+                })
+            } else if ALUMNUS.contains(&gnum) { 
                 return Json(CheckInResp::Allow {
                     html, 
                     name,
