@@ -1,28 +1,36 @@
 {
   inputs = {
-    cargo2nix.url = "github:cargo2nix/cargo2nix/release-0.11.0";
-    flake-utils.follows = "cargo2nix/flake-utils";
-    nixpkgs.follows = "cargo2nix/nixpkgs";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.05";
+
+    flake-utils.url = "github:numtide/flake-utils";
+
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
-  outputs = inputs: with inputs;
+  outputs = { self, nixpkgs, flake-utils, rust-overlay, ... }@inputs:
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs {
           inherit system;
-          overlays = [cargo2nix.overlays.default];
+          overlays = [(import rust-overlay)];
         };
-
-        rustPkgs = pkgs.rustBuilder.makePackageSet {
-          rustVersion = "1.71.0";
-          packageFun = import ./Cargo.nix;
+        rust-pkgs = pkgs.rust-bin.stable.latest.default.override {
+          extensions = [ "rust-analyzer" "rust-src" ];
         };
-
-      in rec {
-        packages = {
-          checker = (rustPkgs.workspace.checker {});
-          default = packages.checker;
+      in {
+        devShells.default = pkgs.mkShell {
+          packages = [
+            rust-pkgs
+            pkgs.mysql
+            pkgs.sqlite
+            pkgs.diesel-cli
+          ] ++ pkgs.lib.optionals pkgs.stdenv.isDarwin (
+            with pkgs.darwin.apple_sdk.frameworks; [
+              SystemConfiguration
+          ]);
         };
-      }
-    );
+      });
 }
