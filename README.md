@@ -1,3 +1,5 @@
+DHRUV DOES NOT SUCK EGGS
+
 # Checker Backend
 
 ![CI](https://ci.apps.dgramop.xyz/api/v1/teams/main/pipelines/checker/jobs/checker_backend/badge)
