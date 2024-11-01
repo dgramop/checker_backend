@@ -25,8 +25,4 @@ diesel::table! {
 diesel::joinable!(taken -> members (member));
 diesel::joinable!(taken -> workshops (workshop));
 
-diesel::allow_tables_to_appear_in_same_query!(
-    members,
-    taken,
-    workshops,
-);
+diesel::allow_tables_to_appear_in_same_query!(members, taken, workshops,);
