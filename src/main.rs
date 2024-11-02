@@ -267,6 +267,9 @@ async fn add_workshop(workshop_form: Form<CreateWorkshopForm>) -> Result<(), ()>
     }
 }
 
+/// Uploads an audio file
+///#[post("")]
+
 /// Checks in a customer, returns gnumber from card/netid, and if the customer should be allowed
 /// into the mix or not
 #[post("/api/check_in/<id>")]
