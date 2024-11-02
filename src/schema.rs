@@ -4,6 +4,7 @@ diesel::table! {
     members (gnum) {
         gnum -> Integer,
         is_staff -> Bool,
+        music -> Nullable<Text>,
     }
 }
 

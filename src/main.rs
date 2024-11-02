@@ -79,7 +79,10 @@ pub enum CheckInResp {
         gnum: u32,
 
         /// Workshops the student has completed
-        workshops: Vec<(Taken, Workshop)>
+        workshops: Vec<(Taken, Workshop)>,
+
+        /// Path or URL of audio file
+        music: Option<String>,
     },
     Disallow {
         /// HTML response from the Atrium backend, usually containing an error message
@@ -96,7 +99,8 @@ enum CheckInError {
 #[diesel(table_name = schema::members)]
 pub struct Member {
     gnum: i32,
-    is_staff: bool
+    is_staff: bool,
+    music: Option<String>,
 }
 
 #[derive(Queryable, Selectable, Insertable, Debug, Serialize)]
@@ -117,7 +121,7 @@ pub struct Workshop {
 #[derive(Display, Debug, Serialize)]
 pub enum TakeWorkshopError {
     AlreadyTook,
-    DBError
+    DBError,
 }
 
 impl Error for TakeWorkshopError {}
@@ -303,7 +307,7 @@ async fn check_in(id: String, state: &State<St>) -> Json<CheckInResp> {//Json<Ch
 
             let mut conn = establish_connection();
 
-            let (name, gnum, ) = {
+            let (name, gnum, music):(_, _, Option<String>) = {
                 let parsed_html = tl::parse(&html, ParserOptions::default()).expect("HTML from API should be parsable");
                 let parser = parsed_html.parser();
 
@@ -337,13 +341,14 @@ async fn check_in(id: String, state: &State<St>) -> Json<CheckInResp> {//Json<Ch
                     }
                 };
 
-                (person_name, gnum)
+                (person_name, gnum, Some(String::from("dfs")))
             };
 
             // TODO: try to insert member into members table
             let _ = diesel::insert_into(schema::members::table).values(Member {
                 gnum: gnum as i32,
-                is_staff: false
+                is_staff: false,
+                music: None,
             }).execute(&mut conn);
 
             // TODO: Load the member's workshops,
@@ -355,6 +360,16 @@ async fn check_in(id: String, state: &State<St>) -> Json<CheckInResp> {//Json<Ch
                 }
             };
 
+            let music: Option<String> = match members::dsl::members.filter(members::dsl::gnum.eq(gnum as i32)).get_result::<Member>(&mut conn) { 
+                Ok(member) => {
+                    member.music
+                }
+                Err(_) => {
+                    None
+                }
+            };
+
+            
             // If the person is eligible normally, or if they were rejected since they already
             // swiped in in the last minute, allow the person in. In this failure mode, we still
             // get gnumber and name information
@@ -363,14 +378,16 @@ async fn check_in(id: String, state: &State<St>) -> Json<CheckInResp> {//Json<Ch
                     html, 
                     name,
                     gnum,
-                    workshops
+                    workshops,
+                    music
                 })
             } else if ALUMNUS.contains(&gnum) { 
                 return Json(CheckInResp::Allow {
                     html, 
                     name,
                     gnum,
-                    workshops
+                    workshops,
+                    music
                 })
             } else {
                 return Json(CheckInResp::Disallow { html })
