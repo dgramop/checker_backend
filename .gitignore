@@ -2,3 +2,4 @@
 sqlite.db
 .cargo/config
 result/
+secrets.toml
