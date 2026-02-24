@@ -463,7 +463,7 @@ struct St {
 fn get_secrets() -> Secrets {
     let template = toml::to_string_pretty(&Secrets::default()).expect("failed to serialize");
 
-    let secrets = std::fs::read_to_string("./secrets.rs");
+    let secrets = std::fs::read_to_string("./secrets.toml");
     let secrets = secrets.expect(&format!("Secret schema template:\n{template}"));
     let secrets = toml::from_str(&secrets);
     secrets.expect(&format!(
