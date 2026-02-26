@@ -17,6 +17,8 @@ use diesel::result::Error as DBError;
 
 extern crate tl;
 
+use log::{error, info, warn};
+
 use rocket::{form::Form, serde::json::Json, State};
 use tl::{Node, NodeHandle, ParserOptions};
 pub mod schema;
@@ -52,7 +54,7 @@ async fn get_client(secrets: &Secrets) -> Result<Client, reqwest::Error> {
         .text()
         .await?;
 
-    println!("Logged in... {}", login_body);
+    info!("Logged in... {}", login_body);
 
     Ok(reqw)
 }
@@ -148,7 +150,10 @@ async fn take_workshop(
         .get_result::<Member>(&mut conn)
     {
         Ok(member) => member,
-        _ => return Err(Json(TakeWorkshopError::DBError)),
+        Err(e) => {
+            error!("Failed to fetch member gnum={}: {:?}", gnum, e);
+            return Err(Json(TakeWorkshopError::DBError));
+        }
     };
 
     let workshop = match workshops::dsl::workshops
@@ -156,7 +161,10 @@ async fn take_workshop(
         .get_result::<Workshop>(&mut conn)
     {
         Ok(workshop) => workshop,
-        _ => return Err(Json(TakeWorkshopError::DBError)),
+        Err(e) => {
+            error!("Failed to fetch workshop: {:?}", e);
+            return Err(Json(TakeWorkshopError::DBError));
+        }
     };
 
     let inserted_taken_id = uuid::Uuid::new_v4().to_string();
@@ -173,7 +181,10 @@ async fn take_workshop(
         Err(DBError::DatabaseError(DatabaseErrorKind::UniqueViolation, _)) => {
             return Err(Json(TakeWorkshopError::AlreadyTook))
         }
-        Err(_) => return Err(Json(TakeWorkshopError::DBError)),
+        Err(e) => {
+            error!("Failed to insert taken record for gnum={}: {:?}", gnum, e);
+            return Err(Json(TakeWorkshopError::DBError));
+        }
     };
 
     match taken::dsl::taken
@@ -181,7 +192,10 @@ async fn take_workshop(
         .get_result::<Taken>(&mut conn)
     {
         Ok(taken) => Ok(Json((taken, workshop))),
-        Err(_) => return Err(Json(TakeWorkshopError::DBError)),
+        Err(e) => {
+            error!("Failed to fetch inserted taken record: {:?}", e);
+            return Err(Json(TakeWorkshopError::DBError));
+        }
     }
 }
 
@@ -198,7 +212,10 @@ async fn untake_workshop(
         .get_result::<Member>(&mut conn)
     {
         Ok(member) => member,
-        _ => return Err(Json(TakeWorkshopError::DBError)),
+        Err(e) => {
+            error!("Failed to fetch member gnum={}: {:?}", gnum, e);
+            return Err(Json(TakeWorkshopError::DBError));
+        }
     };
 
     let workshop = match workshops::dsl::workshops
@@ -206,7 +223,10 @@ async fn untake_workshop(
         .get_result::<Workshop>(&mut conn)
     {
         Ok(workshop) => workshop,
-        _ => return Err(Json(TakeWorkshopError::DBError)),
+        Err(e) => {
+            error!("Failed to fetch workshop: {:?}", e);
+            return Err(Json(TakeWorkshopError::DBError));
+        }
     };
 
     let to_delete = taken::dsl::taken
@@ -217,7 +237,10 @@ async fn untake_workshop(
     // split up for sqlite support since we can't do RETURNING
     let deleted_taken = match to_delete.get_result::<Taken>(&mut conn) {
         Ok(taken) => taken,
-        Err(_) => return Err(Json(TakeWorkshopError::DBError)),
+        Err(e) => {
+            error!("Failed to fetch taken record for deletion gnum={}: {:?}", gnum, e);
+            return Err(Json(TakeWorkshopError::DBError));
+        }
     };
 
     match diesel::delete(to_delete).execute(&mut conn) {
@@ -225,7 +248,10 @@ async fn untake_workshop(
         Err(DBError::DatabaseError(DatabaseErrorKind::UniqueViolation, _)) => {
             return Err(Json(TakeWorkshopError::AlreadyTook))
         }
-        Err(_) => return Err(Json(TakeWorkshopError::DBError)),
+        Err(e) => {
+            error!("Failed to delete taken record for gnum={}: {:?}", gnum, e);
+            return Err(Json(TakeWorkshopError::DBError));
+        }
     }
 }
 
@@ -236,7 +262,7 @@ async fn list_workshops() -> Result<Json<Vec<Workshop>>, ()> {
     match workshops::dsl::workshops.get_results::<Workshop>(&mut conn) {
         Ok(workshops) => Ok(Json(workshops)),
         Err(e) => {
-            eprintln!("Error when loading workshops {:?}", e);
+            error!("Error when loading workshops: {:?}", e);
             Err(())
         }
     }
@@ -254,7 +280,7 @@ async fn delete_workshop(workshop: uuid::Uuid) -> Result<(), ()> {
     {
         Ok(_) => Ok(()),
         Err(e) => {
-            eprintln!("Error when loading workshops {:?}", e);
+            error!("Error when deleting workshop: {:?}", e);
             Err(())
         }
     }
@@ -278,7 +304,7 @@ async fn add_workshop(workshop_form: Form<CreateWorkshopForm>) -> Result<(), ()>
     {
         Ok(_) => Ok(()),
         Err(e) => {
-            eprintln!("Error when loading workshops {:?}", e);
+            error!("Error when adding workshop: {:?}", e);
             Err(())
         }
     }
@@ -316,7 +342,7 @@ async fn check_in(id: String, state: &State<St>) -> Json<CheckInResp> {
             state.client.write().await.client = get_client(&state.secrets)
                 .await
                 .expect("should log-in to atrium");
-            eprintln!("Was logged out of atrium, logging in and trying again");
+            warn!("Was logged out of atrium, logging in and trying again");
             atrium = atrium_req
                 .send()
                 .await
@@ -366,7 +392,7 @@ async fn check_in(id: String, state: &State<St>) -> Json<CheckInResp> {
                         {
                             if let Node::Raw(b) = NodeHandle::get(child, parser).unwrap() {
                                 let candidate_id = b.as_utf8_str().to_string();
-                                eprintln!("{}", candidate_id);
+                                log::debug!("{}", candidate_id);
 
                                 if let Ok(parsed_integer_id) =
                                     u32::from_str_radix(&candidate_id.trim(), 10)
@@ -387,13 +413,16 @@ async fn check_in(id: String, state: &State<St>) -> Json<CheckInResp> {
             };
 
             // TODO: try to insert member into members table
-            let _ = diesel::insert_into(schema::members::table)
+            if let Err(e) = diesel::insert_into(schema::members::table)
                 .values(Member {
                     gnum: gnum as i32,
                     is_staff: false,
                     music: None,
                 })
-                .execute(&mut conn);
+                .execute(&mut conn)
+            {
+                warn!("Failed to insert member gnum={}: {:?} (may already exist)", gnum, e);
+            }
 
             // TODO: Load the member's workshops,
             let workshops: Vec<(Taken, Workshop)> = match taken::dsl::taken
@@ -405,7 +434,7 @@ async fn check_in(id: String, state: &State<St>) -> Json<CheckInResp> {
             {
                 Ok(workshops) => workshops,
                 Err(e) => {
-                    eprintln!(
+                    warn!(
                         "Non-fatal error loading workshops for gnum {} with error: {:?}",
                         gnum, e
                     );
@@ -418,7 +447,10 @@ async fn check_in(id: String, state: &State<St>) -> Json<CheckInResp> {
                 .get_result::<Member>(&mut conn)
             {
                 Ok(member) => member.music,
-                Err(_) => None,
+                Err(e) => {
+                    warn!("Failed to fetch music for gnum={}: {:?}", gnum, e);
+                    None
+                }
             };
 
             // If the person is eligible normally, or if they were rejected since they already
@@ -473,6 +505,7 @@ fn get_secrets() -> Secrets {
 
 #[launch]
 async fn rocket() -> _ {
+    env_logger::init();
     let secrets = get_secrets();
 
     rocket::build()
