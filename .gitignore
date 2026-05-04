@@ -1,5 +1,5 @@
 /target
 sqlite.db
 .cargo/config
-result/
+result
 secrets.toml
